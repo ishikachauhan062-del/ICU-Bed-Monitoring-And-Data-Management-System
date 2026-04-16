@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart ICU Monitor — Patient Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ─── Design Tokens ──────────────────────────────────────────────────────── */
+:root {
+  /* ── CHANGED: Dark teal / deep-sea background ── */
+  --bg-void:       #030e14;
+  --bg-panel:      #061a24;
+  --bg-card:       #092230;
+  --bg-inset:      #041018;
+  --border:        #0e3848;
+  --border-glow:   #126080;
+
+  --green:         #00e87a;
+  --green-dim:     #00913d;
+  --cyan:          #00d4ff;
+  --cyan-dim:      #007a94;
+  --amber:         #ffb830;
+  --amber-dim:     #7a5500;
+  --red:           #ff3b3b;
+  --red-dim:       #7a0000;
+  --purple:        #b06aff;
+  --white:         #e8f0f8;
+  --muted:         #4a7080;
+  --dimmer:        #2a4050;
+
+  --font-mono:     'Share Tech Mono', monospace;
+  --font-body:     'Barlow', sans-serif;
+  --font-cond:     'Barlow Condensed', sans-serif;
+
+  --radius:        6px;
+  --radius-lg:     10px;
+  --shadow:        0 4px 24px rgba(0,0,0,0.6);
+  --glow-green:    0 0 20px rgba(0,232,122,0.25);
+  --glow-red:      0 0 20px rgba(255,59,59,0.35);
+  --glow-amber:    0 0 16px rgba(255,184,48,0.25);
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  background: var(--bg-void);
+  color: var(--white);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.04) 2px,
+    rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+header {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  position: sticky; top: 0; z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.logo-mark {
+  width: 34px; height: 34px;
+  background: var(--green);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #000;
+  font-weight: bold;
+  letter-spacing: -1px;
+  box-shadow: var(--glow-green);
+}
+.logo-text { font-family: var(--font-cond); font-size: 17px; font-weight: 700; letter-spacing: 0.5px; color: var(--white); }
+.logo-text span { color: var(--green); }
+.header-status { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.pulse-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  box-shadow: var(--glow-green);
+  animation: pulse-blink 1.4s ease-in-out infinite;
+}
+@keyframes pulse-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.header-right { display: flex; align-items: center; gap: 20px; }
+#live-clock { font-family: var(--font-mono); font-size: 13px; color: var(--cyan); letter-spacing: 1px; }
+.header-tag {
+  font-family: var(--font-cond); font-size: 11px; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 3px;
+  border: 1px solid var(--green-dim); color: var(--green);
+}
+
+/* ─── Patient Selector Bar ───────────────────────────────────────────────── */
+.patient-bar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.patient-bar label { font-family: var(--font-cond); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.patient-bar select {
+  background: var(--bg-inset); border: 1px solid var(--border); color: var(--white);
+  padding: 6px 14px; border-radius: var(--radius); font-family: var(--font-mono); font-size: 13px;
+  cursor: pointer; outline: none;
+}
+.patient-bar select:focus { border-color: var(--cyan); }
+.btn {
+  padding: 6px 16px; border-radius: var(--radius); border: 1px solid;
+  font-family: var(--font-cond); font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-primary { background: var(--green); border-color: var(--green); color: #000; }
+.btn-primary:hover { background: #00ff8a; box-shadow: var(--glow-green); }
+.btn-secondary { background: transparent; border-color: var(--border-glow); color: var(--cyan); }
+.btn-secondary:hover { background: rgba(0,212,255,0.08); border-color: var(--cyan); }
+.btn-danger { background: transparent; border-color: var(--red-dim); color: var(--red); }
+.btn-danger:hover { background: rgba(255,59,59,0.1); border-color: var(--red); }
+.btn-amber { background: transparent; border-color: var(--amber-dim); color: var(--amber); }
+.btn-amber:hover { background: rgba(255,184,48,0.08); border-color: var(--amber); }
+.refresh-badge { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.refresh-countdown { color: var(--cyan); font-size: 13px; }
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: 16px;
+  padding: 16px 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.col-left  { grid-column: 1; display: flex; flex-direction: column; gap: 16px; }
+.col-right { grid-column: 2; display: flex; flex-direction: column; gap: 16px; }
+
+/* ─── Panel Card ─────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-inset);
+}
+.panel-title {
+  font-family: var(--font-cond); font-size: 11px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-title-dot { width: 6px; height: 6px; border-radius: 50%; }
+.panel-body { padding: 14px 16px; }
+
+/* ─── Patient Info Card ──────────────────────────────────────────────────── */
+.patient-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--bg-inset), var(--bg-card));
+  border: 2px solid var(--border-glow);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-cond); font-size: 22px; font-weight: 700; color: var(--cyan);
+  flex-shrink: 0;
+}
+.patient-header-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.patient-name { font-family: var(--font-cond); font-size: 20px; font-weight: 700; color: var(--white); }
+.patient-id-badge {
+  font-family: var(--font-mono); font-size: 11px; color: var(--cyan);
+  background: rgba(0,212,255,0.08); border: 1px solid var(--cyan-dim);
+  padding: 2px 8px; border-radius: 3px; display: inline-block; margin-top: 2px;
+}
+.condition-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 4px;
+  font-family: var(--font-cond); font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+  background: rgba(255,184,48,0.1); border: 1px solid var(--amber-dim); color: var(--amber);
+  margin-bottom: 12px;
+}
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.info-item { background: var(--bg-inset); border-radius: var(--radius); padding: 8px 10px; }
+.info-label { font-family: var(--font-cond); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.info-value { font-family: var(--font-cond); font-size: 15px; font-weight: 600; color: var(--white); }
+
+/* ─── Vital Signs ────────────────────────────────────────────────────────── */
+.vitals-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.vital-card {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.vital-card::before {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px; background: var(--color, var(--border));
+}
+.vital-card.abnormal { border-color: var(--red-dim); box-shadow: var(--glow-red); }
+.vital-card.abnormal::before { background: var(--red); }
+.vital-label { font-family: var(--font-cond); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.vital-value {
+  font-family: var(--font-mono); font-size: 32px; line-height: 1;
+  color: var(--color, var(--green)); font-weight: normal;
+  transition: color 0.3s;
+}
+.vital-card.abnormal .vital-value { color: var(--red); animation: flash-red 0.8s ease-in-out infinite alternate; }
+@keyframes flash-red { from { opacity: 1; } to { opacity: 0.6; } }
+.vital-unit { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-top: 2px; }
+.vital-range { font-family: var(--font-cond); font-size: 10px; color: var(--dimmer); margin-top: 4px; letter-spacing: 0.5px; }
+.vital-icon { position: absolute; top: 10px; right: 12px; font-size: 18px; opacity: 0.25; }
+
+/* ─── Prediction Banner ──────────────────────────────────────────────────── */
+.prediction-banner {
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.pred-icon { font-size: 20px; }
+.pred-label { font-family: var(--font-cond); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.pred-value { font-family: var(--font-mono); font-size: 16px; color: var(--cyan); }
+.pred-risk { font-family: var(--font-cond); font-size: 12px; font-weight: 600; }
+.pred-risk.risk-warning { color: var(--amber); }
+.pred-risk.risk-ok { color: var(--green); }
+.pred-risk.risk-bad { color: var(--red); }
+
+/* ─── Alert Feed ─────────────────────────────────────────────────────────── */
+.alert-list { display: flex; flex-direction: column; gap: 7px; max-height: 280px; overflow-y: auto; }
+.alert-list::-webkit-scrollbar { width: 4px; }
+.alert-list::-webkit-scrollbar-track { background: var(--bg-inset); }
+.alert-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.alert-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px; border-radius: var(--radius);
+  border-left: 3px solid;
+  background: var(--bg-inset);
+  animation: slideIn 0.3s ease;
+}
+@keyframes slideIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform:none; } }
+.alert-item.Critical { border-color: var(--red); background: rgba(255,59,59,0.06); }
+.alert-item.High     { border-color: var(--amber); background: rgba(255,184,48,0.06); }
+.alert-item.Medium   { border-color: var(--purple); background: rgba(176,106,255,0.06); }
+.alert-item.Low      { border-color: var(--cyan); background: rgba(0,212,255,0.05); }
+.alert-severity-chip {
+  font-family: var(--font-cond); font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 2px 7px; border-radius: 3px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+}
+.Critical .alert-severity-chip { background: rgba(255,59,59,0.2); color: var(--red); }
+.High     .alert-severity-chip { background: rgba(255,184,48,0.2); color: var(--amber); }
+.Medium   .alert-severity-chip { background: rgba(176,106,255,0.2); color: var(--purple); }
+.Low      .alert-severity-chip { background: rgba(0,212,255,0.15); color: var(--cyan); }
+.alert-type { font-family: var(--font-cond); font-size: 14px; font-weight: 600; color: var(--white); }
+.alert-meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+.no-alerts { font-family: var(--font-cond); font-size: 13px; color: var(--muted); text-align: center; padding: 20px; }
+
+/* ─── Graph ──────────────────────────────────────────────────────────────── */
+.chart-wrapper { position: relative; height: 210px; }
+
+/* ─── Observations ───────────────────────────────────────────────────────── */
+.obs-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.obs-item {
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px;
+}
+.obs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.obs-by { font-family: var(--font-cond); font-size: 12px; color: var(--cyan); font-weight: 600; }
+.obs-time { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.obs-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.obs-tag {
+  font-family: var(--font-cond); font-size: 11px; padding: 2px 7px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.obs-notes { font-size: 12px; color: var(--white); opacity: 0.8; line-height: 1.5; }
+
+/* ─── Manual Observation Form ────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-label { font-family: var(--font-cond); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.form-control {
+  background: var(--bg-inset); border: 1px solid var(--border); color: var(--white);
+  padding: 7px 10px; border-radius: var(--radius); font-family: var(--font-body); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.form-control:focus { border-color: var(--cyan); }
+.form-control option { background: var(--bg-panel); }
+textarea.form-control { resize: none; height: 60px; }
+
+/* ─── Status Bar ─────────────────────────────────────────────────────────── */
+.status-bar {
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 7px 14px;
+  display: flex; align-items: center; gap: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}
+.status-item { display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* ─── Scrollbar global ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ─── Toast notifications ────────────────────────────────────────────────── */
+.toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 998; }
+.toast {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 16px;
+  font-family: var(--font-cond); font-size: 13px; color: var(--white);
+  box-shadow: var(--shadow); min-width: 240px;
+  animation: toastIn 0.3s ease;
+  border-left: 3px solid var(--green);
+}
+.toast.error { border-left-color: var(--red); }
+.toast.warning { border-left-color: var(--amber); }
+@keyframes toastIn { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform:none; } }
+
+/* ─── Patient Manage Modal ───────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(3,14,20,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-lg);
+  width: 560px; max-width: 96vw;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.7);
+  animation: modalIn 0.25s ease;
+  overflow: hidden;
+}
+@keyframes modalIn { from { opacity:0; transform: translateY(-16px) scale(0.97); } to { opacity:1; transform:none; } }
+.modal-header {
+  background: var(--bg-inset); border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-family: var(--font-cond); font-size: 15px; font-weight: 700; letter-spacing: 1px; color: var(--white); }
+.modal-close {
+  background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1;
+  padding: 0 4px;
+}
+.modal-close:hover { color: var(--white); }
+.modal-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.modal-tab {
+  padding: 10px 20px; font-family: var(--font-cond); font-size: 12px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--muted);
+  cursor: pointer; border: none; background: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.modal-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.modal-tab:hover:not(.active) { color: var(--white); }
+.modal-body { padding: 20px; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ─── Patient List (discharge) ───────────────────────────────────────────── */
+.patient-manage-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+.patient-manage-item {
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.patient-manage-info { flex: 1; min-width: 0; }
+.pmg-name { font-family: var(--font-cond); font-size: 15px; font-weight: 700; color: var(--white); }
+.pmg-meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+.pmg-condition {
+  font-family: var(--font-cond); font-size: 11px; color: var(--amber);
+  background: rgba(255,184,48,0.08); border: 1px solid var(--amber-dim);
+  padding: 1px 7px; border-radius: 3px; margin-top: 4px; display: inline-block;
+}
+.badge-active {
+  font-family: var(--font-cond); font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 3px 9px; border-radius: 3px; text-transform: uppercase;
+  background: rgba(0,232,122,0.1); border: 1px solid var(--green-dim); color: var(--green);
+  white-space: nowrap;
+}
+.badge-discharged {
+  font-family: var(--font-cond); font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 3px 9px; border-radius: 3px; text-transform: uppercase;
+  background: rgba(74,112,128,0.15); border: 1px solid var(--muted); color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .col-left, .col-right { grid-column: 1; }
+  .vitals-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 600px) {
+  .vitals-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .info-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-left">
+    <div class="logo-mark">ICU</div>
+    <div class="logo-text">Smart<span>ICU</span> Monitor</div>
+    <div class="header-status"><div class="pulse-dot"></div><span id="conn-status">DEMO MODE</span></div>
+  </div>
+  <div class="header-right">
+    <span id="live-clock">--:--:--</span>
+    <div class="header-tag">● LIVE</div>
+  </div>
+</header>
+
+<!-- ─── Patient Selector ────────────────────────────────────────────────────── -->
+<div class="patient-bar">
+  <label>ACTIVE PATIENT</label>
+  <select id="patient-select" onchange="switchPatient()">
+    <option value="P001">P001 — Rajesh Kumar · ICU-01</option>
+    <option value="P002">P002 — Priya Mehta · ICU-02</option>
+    <option value="P003">P003 — Arun Singh · ICU-03</option>
+    <option value="P004">P004 — Sunita Verma · ICU-04</option>
+  </select>
+  <button class="btn btn-primary" onclick="triggerSimulate()">⟳ Simulate Reading</button>
+  <button class="btn btn-secondary" onclick="toggleAutoRefresh()">⏸ Auto-Refresh</button>
+  <button class="btn btn-amber" onclick="openManageModal()">⊕ Manage Patients</button>
+  <div class="refresh-badge">
+    NEXT UPDATE IN <span class="refresh-countdown" id="countdown">3s</span>
+  </div>
+</div>
+
+<!-- ─── Main Grid ───────────────────────────────────────────────────────────── -->
+<div class="main-grid">
+
+  <!-- ═══ LEFT COLUMN ═══ -->
+  <div class="col-left">
+
+    <!-- Patient Details -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--cyan)"></span>Patient Record</span>
+        <span id="pt-bed" style="font-family:var(--font-mono);font-size:11px;color:var(--green)">ICU-01</span>
+      </div>
+      <div class="panel-body">
+        <div class="patient-header-row">
+          <div class="patient-avatar" id="pt-avatar">RK</div>
+          <div>
+            <div class="patient-name" id="pt-name">Rajesh Kumar</div>
+            <div class="patient-id-badge" id="pt-id">P001</div>
+          </div>
+        </div>
+        <div class="condition-badge" id="pt-condition">Acute Myocardial Infarction</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="info-label">Age</div><div class="info-value" id="pt-age">58 yrs</div></div>
+          <div class="info-item"><div class="info-label">Gender</div><div class="info-value" id="pt-gender">Male</div></div>
+          <div class="info-item"><div class="info-label">Blood Group</div><div class="info-value" id="pt-blood">B+</div></div>
+          <div class="info-item"><div class="info-label">Attending</div><div class="info-value" id="pt-doctor" style="font-size:12px">Dr. Sharma</div></div>
+          <div class="info-item" style="grid-column:1/-1"><div class="info-label">Admitted</div><div class="info-value" id="pt-admitted">2025-04-10</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-item"><div class="status-dot" style="background:var(--green)"></div><span>Sensors OK</span></div>
+      <div class="status-item"><div class="status-dot" style="background:var(--cyan)"></div><span>Demo Live</span></div>
+      <div class="status-item"><div class="status-dot" id="alert-dot" style="background:var(--muted)"></div><span id="alert-count-badge">No Active Alerts</span></div>
+    </div>
+
+    <!-- Alerts Panel -->
+    <div class="panel" style="flex:1">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--red)"></span>Alert Feed</span>
+        <span id="alert-count-header" style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">0 alerts</span>
+      </div>
+      <div class="panel-body">
+        <div class="alert-list" id="alert-list">
+          <div class="no-alerts">No alerts for this patient</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Observation Form -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--purple)"></span>Log Observation</span>
+      </div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Pain Level (0–10)</label>
+            <input type="number" class="form-control" id="obs-pain" min="0" max="10" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Breathing</label>
+            <select class="form-control" id="obs-breath">
+              <option>None</option><option>Mild</option><option>Moderate</option><option>Severe</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Consciousness</label>
+            <select class="form-control" id="obs-consciousness">
+              <option>Alert</option><option>Confused</option><option>Semi-conscious</option><option>Unconscious</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Entered By</label>
+            <select class="form-control" id="obs-by">
+              <option>Dr. Anita Sharma</option><option>Dr. Vikram Rao</option>
+              <option>Nurse Ravi Kumar</option><option>Nurse Priya Das</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Clinical Notes</label>
+            <textarea class="form-control" id="obs-notes" placeholder="Enter observation notes…"></textarea>
+          </div>
+          <div class="form-group full">
+            <button class="btn btn-primary" onclick="submitObservation()" style="width:100%">Submit Observation</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col-left -->
+
+  <!-- ═══ RIGHT COLUMN ═══ -->
+  <div class="col-right">
+
+    <!-- Vital Signs -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--green)"></span>Vital Signs Monitor</span>
+        <span id="vitals-timestamp" style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">--</span>
+      </div>
+      <div class="panel-body">
+        <div class="vitals-grid">
+          <div class="vital-card" id="card-hr" style="--color:var(--green)">
+            <div class="vital-icon">❤</div>
+            <div class="vital-label">Heart Rate</div>
+            <div class="vital-value" id="val-hr">--</div>
+            <div class="vital-unit">BPM</div>
+            <div class="vital-range">Normal: 60–100</div>
+          </div>
+          <div class="vital-card" id="card-spo2" style="--color:var(--cyan)">
+            <div class="vital-icon">◎</div>
+            <div class="vital-label">SpO₂</div>
+            <div class="vital-value" id="val-spo2">--</div>
+            <div class="vital-unit">%</div>
+            <div class="vital-range">Normal: ≥95%</div>
+          </div>
+          <div class="vital-card" id="card-bp" style="--color:var(--amber)">
+            <div class="vital-icon">⊕</div>
+            <div class="vital-label">Blood Pressure</div>
+            <div class="vital-value" id="val-bp" style="font-size:24px;padding-top:4px">--/--</div>
+            <div class="vital-unit">mmHg</div>
+            <div class="vital-range">Normal: 90–140 sys</div>
+          </div>
+          <div class="vital-card" id="card-temp" style="--color:var(--purple)">
+            <div class="vital-icon">⚡</div>
+            <div class="vital-label">Temperature</div>
+            <div class="vital-value" id="val-temp">--</div>
+            <div class="vital-unit">°F</div>
+            <div class="vital-range">Normal: 97–99°F</div>
+          </div>
+        </div>
+
+        <!-- Prediction Banner -->
+        <div class="prediction-banner" style="margin-top:12px">
+          <div class="pred-icon">🔮</div>
+          <div>
+            <div class="pred-label">Predicted Next HR</div>
+            <div class="pred-value" id="pred-hr">—</div>
+          </div>
+          <div style="margin-left:auto;text-align:right">
+            <div class="pred-label">Trend Assessment</div>
+            <div class="pred-risk" id="pred-risk">Awaiting data…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Heart Rate Trend Graph -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--green)"></span>Heart Rate Trend</span>
+        <span style="font-family:var(--font-cond);font-size:11px;color:var(--muted);letter-spacing:1px">LAST 20 READINGS</span>
+      </div>
+      <div class="panel-body" style="padding:10px 12px">
+        <div class="chart-wrapper">
+          <canvas id="hr-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- SpO₂ Mini-chart -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--cyan)"></span>SpO₂ Saturation Trend</span>
+        <span style="font-family:var(--font-cond);font-size:11px;color:var(--muted);letter-spacing:1px">LAST 20 READINGS</span>
+      </div>
+      <div class="panel-body" style="padding:10px 12px">
+        <div class="chart-wrapper" style="height:170px">
+          <canvas id="spo2-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Observations History -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><span class="panel-title-dot" style="background:var(--purple)"></span>Clinical Observations</span>
+        <button class="btn btn-secondary" onclick="renderObservations(currentPatient)" style="padding:3px 10px;font-size:11px">Refresh</button>
+      </div>
+      <div class="panel-body">
+        <div class="obs-list" id="obs-list">
+          <div class="no-alerts" style="color:var(--muted)">No observations recorded</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col-right -->
+
+</div><!-- /main-grid -->
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ─── Manage Patients Modal ─────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="manage-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">⊕ Patient Management</span>
+      <button class="modal-close" onclick="closeManageModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchModalTab('tab-admit', this)">Admit Patient</button>
+      <button class="modal-tab" onclick="switchModalTab('tab-discharge', this)">Discharge / Status</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Admit Tab -->
+      <div class="tab-pane active" id="tab-admit">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" id="admit-name" placeholder="Patient full name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Age</label>
+            <input type="number" class="form-control" id="admit-age" min="1" max="120" placeholder="e.g. 45">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gender</label>
+            <select class="form-control" id="admit-gender">
+              <option>Male</option><option>Female</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Diagnosis / Condition</label>
+            <input type="text" class="form-control" id="admit-condition" placeholder="e.g. Acute Respiratory Failure">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ICU Bed</label>
+            <select class="form-control" id="admit-bed">
+              <option>ICU-05</option><option>ICU-06</option><option>ICU-07</option>
+              <option>ICU-08</option><option>ICU-09</option><option>ICU-10</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Blood Group</label>
+            <select class="form-control" id="admit-blood">
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Attending Doctor</label>
+            <select class="form-control" id="admit-doctor">
+              <option>Dr. Anita Sharma</option><option>Dr. Vikram Rao</option>
+              <option>Dr. Suresh Iyer</option><option>Dr. Meena Gupta</option>
+              <option>Dr. Rajiv Nair</option><option>Dr. Kavita Patel</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <button class="btn btn-primary" onclick="admitPatient()" style="width:100%;padding:10px">
+              ✓ Admit Patient to ICU
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Discharge Tab -->
+      <div class="tab-pane" id="tab-discharge">
+        <div class="patient-manage-list" id="discharge-list">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ─── Scripts ──────────────────────────────────────────────────────────────── -->
+<script>
+// ─── State ─────────────────────────────────────────────────────────────────────
+const API = 'http://127.0.0.1:5000';
+let currentPatient = 'P001';
+let autoRefresh = true;
+let refreshInterval = null;
+let countdown = 3;
+let hrChart = null, spo2Chart = null;
+let nextPatientNum = 5;
+
+// ─── Patient Registry (in-memory, mirrors patients.csv) ───────────────────────
+const PATIENTS = [
+  { patient_id:'P001', name:'Rajesh Kumar',  initials:'RK', bed:'ICU-01', condition:'Acute Myocardial Infarction',  age:'58 yrs', gender:'Male',   blood:'B+',  doctor:'Dr. Anita Sharma', admitted:'2025-04-10', status:'active' },
+  { patient_id:'P002', name:'Priya Mehta',   initials:'PM', bed:'ICU-02', condition:'Severe Pneumonia',             age:'42 yrs', gender:'Female', blood:'O+',  doctor:'Dr. Vikram Rao',   admitted:'2025-04-11', status:'active' },
+  { patient_id:'P003', name:'Arun Singh',    initials:'AS', bed:'ICU-03', condition:'Post-Op Care (CABG)',           age:'67 yrs', gender:'Male',   blood:'A+',  doctor:'Dr. Suresh Iyer',  admitted:'2025-04-09', status:'active' },
+  { patient_id:'P004', name:'Sunita Verma',  initials:'SV', bed:'ICU-04', condition:'Septic Shock',                 age:'35 yrs', gender:'Female', blood:'AB-', doctor:'Dr. Meena Gupta',  admitted:'2025-04-12', status:'active' }
+];
+
+// ─── Embedded vitals data (from vitals.csv) ────────────────────────────────────
+const VITALS_DB = {
+  P001: [
+    {heart_rate:88.0, spo2:96.5, bp_systolic:130, bp_diastolic:82, temperature:98.9, timestamp:'2025-04-15 08:00:00'},
+    {heart_rate:91.0, spo2:95.8, bp_systolic:132, bp_diastolic:84, temperature:99.1, timestamp:'2025-04-15 08:03:00'},
+    {heart_rate:95.0, spo2:94.5, bp_systolic:135, bp_diastolic:85, temperature:99.5, timestamp:'2025-04-15 08:06:00'},
+    {heart_rate:98.0, spo2:93.2, bp_systolic:138, bp_diastolic:87, temperature:100.1,timestamp:'2025-04-15 08:09:00'},
+    {heart_rate:102.5,spo2:92.0, bp_systolic:142, bp_diastolic:89, temperature:100.8,timestamp:'2025-04-15 08:12:00'},
+    {heart_rate:105.0,spo2:91.5, bp_systolic:144, bp_diastolic:90, temperature:101.0,timestamp:'2025-04-15 08:15:00'},
+    {heart_rate:103.0,spo2:91.8, bp_systolic:141, bp_diastolic:88, temperature:100.7,timestamp:'2025-04-15 08:18:00'},
+    {heart_rate:99.0, spo2:92.5, bp_systolic:139, bp_diastolic:87, temperature:100.4,timestamp:'2025-04-15 08:21:00'},
+    {heart_rate:97.0, spo2:93.0, bp_systolic:137, bp_diastolic:86, temperature:100.1,timestamp:'2025-04-15 08:24:00'},
+    {heart_rate:95.5, spo2:93.5, bp_systolic:135, bp_diastolic:85, temperature:99.8, timestamp:'2025-04-15 08:27:00'},
+    {heart_rate:93.0, spo2:94.0, bp_systolic:133, bp_diastolic:84, temperature:99.5, timestamp:'2025-04-15 08:30:00'},
+    {heart_rate:90.5, spo2:94.8, bp_systolic:131, bp_diastolic:83, temperature:99.2, timestamp:'2025-04-15 08:33:00'},
+    {heart_rate:89.0, spo2:95.2, bp_systolic:130, bp_diastolic:82, temperature:99.0, timestamp:'2025-04-15 08:36:00'},
+    {heart_rate:91.0, spo2:95.0, bp_systolic:132, bp_diastolic:83, temperature:99.1, timestamp:'2025-04-15 08:39:00'},
+    {heart_rate:94.0, spo2:94.2, bp_systolic:134, bp_diastolic:85, temperature:99.4, timestamp:'2025-04-15 08:42:00'},
+    {heart_rate:97.5, spo2:93.5, bp_systolic:136, bp_diastolic:86, temperature:99.7, timestamp:'2025-04-15 08:45:00'},
+    {heart_rate:100.0,spo2:92.8, bp_systolic:140, bp_diastolic:88, temperature:100.2,timestamp:'2025-04-15 08:48:00'},
+    {heart_rate:102.0,spo2:92.1, bp_systolic:143, bp_diastolic:89, temperature:100.6,timestamp:'2025-04-15 08:51:00'},
+    {heart_rate:104.5,spo2:91.3, bp_systolic:145, bp_diastolic:90, temperature:101.1,timestamp:'2025-04-15 08:54:00'},
+    {heart_rate:107.0,spo2:90.8, bp_systolic:147, bp_diastolic:91, temperature:101.5,timestamp:'2025-04-15 08:57:00'},
+  ],
+  P002: [
+    {heart_rate:76.0, spo2:97.2, bp_systolic:118, bp_diastolic:76, temperature:98.6, timestamp:'2025-04-15 08:00:00'},
+    {heart_rate:78.5, spo2:96.9, bp_systolic:120, bp_diastolic:78, temperature:98.8, timestamp:'2025-04-15 08:03:00'},
+    {heart_rate:80.0, spo2:96.5, bp_systolic:122, bp_diastolic:79, temperature:99.0, timestamp:'2025-04-15 08:06:00'},
+    {heart_rate:79.5, spo2:96.7, bp_systolic:121, bp_diastolic:78, temperature:98.9, timestamp:'2025-04-15 08:09:00'},
+    {heart_rate:81.0, spo2:96.3, bp_systolic:123, bp_diastolic:79, temperature:99.1, timestamp:'2025-04-15 08:12:00'},
+    {heart_rate:83.5, spo2:95.9, bp_systolic:124, bp_diastolic:80, temperature:99.3, timestamp:'2025-04-15 08:15:00'},
+    {heart_rate:85.0, spo2:95.5, bp_systolic:126, bp_diastolic:81, temperature:99.5, timestamp:'2025-04-15 08:18:00'},
+    {heart_rate:82.0, spo2:96.0, bp_systolic:124, bp_diastolic:80, temperature:99.2, timestamp:'2025-04-15 08:21:00'},
+    {heart_rate:80.5, spo2:96.4, bp_systolic:122, bp_diastolic:79, temperature:99.0, timestamp:'2025-04-15 08:24:00'},
+    {heart_rate:78.0, spo2:96.8, bp_systolic:120, bp_diastolic:77, temperature:98.7, timestamp:'2025-04-15 08:27:00'},
+    {heart_rate:77.5, spo2:97.0, bp_systolic:119, bp_diastolic:77, temperature:98.6, timestamp:'2025-04-15 08:30:00'},
+    {heart_rate:76.5, spo2:97.2, bp_systolic:118, bp_diastolic:76, temperature:98.5, timestamp:'2025-04-15 08:33:00'},
+    {heart_rate:75.0, spo2:97.5, bp_systolic:117, bp_diastolic:75, temperature:98.4, timestamp:'2025-04-15 08:36:00'},
+    {heart_rate:74.5, spo2:97.8, bp_systolic:116, bp_diastolic:75, temperature:98.3, timestamp:'2025-04-15 08:39:00'},
+    {heart_rate:73.0, spo2:98.0, bp_systolic:115, bp_diastolic:74, temperature:98.2, timestamp:'2025-04-15 08:42:00'},
+    {heart_rate:72.5, spo2:98.2, bp_systolic:114, bp_diastolic:74, temperature:98.1, timestamp:'2025-04-15 08:45:00'},
+    {heart_rate:71.0, spo2:98.4, bp_systolic:113, bp_diastolic:73, temperature:98.0, timestamp:'2025-04-15 08:48:00'},
+    {heart_rate:70.5, spo2:98.5, bp_systolic:112, bp_diastolic:73, temperature:97.9, timestamp:'2025-04-15 08:51:00'},
+    {heart_rate:71.5, spo2:98.3, bp_systolic:113, bp_diastolic:74, temperature:98.0, timestamp:'2025-04-15 08:54:00'},
+    {heart_rate:73.0, spo2:98.1, bp_systolic:115, bp_diastolic:74, temperature:98.1, timestamp:'2025-04-15 08:57:00'},
+  ],
+  P003: [
+    {heart_rate:65.0, spo2:98.0, bp_systolic:125, bp_diastolic:80, temperature:98.4, timestamp:'2025-04-15 08:00:00'},
+    {heart_rate:67.0, spo2:97.8, bp_systolic:126, bp_diastolic:81, temperature:98.6, timestamp:'2025-04-15 08:03:00'},
+    {heart_rate:66.5, spo2:97.9, bp_systolic:125, bp_diastolic:80, temperature:98.5, timestamp:'2025-04-15 08:06:00'},
+    {heart_rate:68.0, spo2:97.7, bp_systolic:127, bp_diastolic:81, temperature:98.7, timestamp:'2025-04-15 08:09:00'},
+    {heart_rate:69.5, spo2:97.5, bp_systolic:128, bp_diastolic:82, temperature:98.8, timestamp:'2025-04-15 08:12:00'},
+    {heart_rate:70.0, spo2:97.3, bp_systolic:129, bp_diastolic:82, temperature:99.0, timestamp:'2025-04-15 08:15:00'},
+    {heart_rate:71.0, spo2:97.1, bp_systolic:130, bp_diastolic:83, temperature:99.2, timestamp:'2025-04-15 08:18:00'},
+    {heart_rate:69.0, spo2:97.4, bp_systolic:128, bp_diastolic:82, temperature:99.0, timestamp:'2025-04-15 08:21:00'},
+    {heart_rate:68.5, spo2:97.6, bp_systolic:127, bp_diastolic:81, temperature:98.8, timestamp:'2025-04-15 08:24:00'},
+    {heart_rate:67.5, spo2:97.8, bp_systolic:126, bp_diastolic:81, temperature:98.6, timestamp:'2025-04-15 08:27:00'},
+    {heart_rate:66.0, spo2:98.0, bp_systolic:125, bp_diastolic:80, temperature:98.5, timestamp:'2025-04-15 08:30:00'},
+    {heart_rate:65.5, spo2:98.1, bp_systolic:124, bp_diastolic:80, temperature:98.4, timestamp:'2025-04-15 08:33:00'},
+    {heart_rate:64.5, spo2:98.3, bp_systolic:123, bp_diastolic:79, temperature:98.3, timestamp:'2025-04-15 08:36:00'},
+    {heart_rate:63.0, spo2:98.5, bp_systolic:122, bp_diastolic:79, temperature:98.2, timestamp:'2025-04-15 08:39:00'},
+    {heart_rate:62.5, spo2:98.6, bp_systolic:121, bp_diastolic:78, temperature:98.1, timestamp:'2025-04-15 08:42:00'},
+    {heart_rate:63.5, spo2:98.4, bp_systolic:122, bp_diastolic:79, temperature:98.2, timestamp:'2025-04-15 08:45:00'},
+    {heart_rate:65.0, spo2:98.2, bp_systolic:123, bp_diastolic:79, temperature:98.3, timestamp:'2025-04-15 08:48:00'},
+    {heart_rate:66.5, spo2:98.0, bp_systolic:124, bp_diastolic:80, temperature:98.5, timestamp:'2025-04-15 08:51:00'},
+    {heart_rate:67.0, spo2:97.9, bp_systolic:125, bp_diastolic:80, temperature:98.6, timestamp:'2025-04-15 08:54:00'},
+    {heart_rate:68.0, spo2:97.7, bp_systolic:126, bp_diastolic:81, temperature:98.7, timestamp:'2025-04-15 08:57:00'},
+  ],
+  P004: [
+    {heart_rate:110.5,spo2:88.5, bp_systolic:95, bp_diastolic:62, temperature:102.5,timestamp:'2025-04-15 08:00:00'},
+    {heart_rate:115.0,spo2:87.0, bp_systolic:92, bp_diastolic:60, temperature:103.1,timestamp:'2025-04-15 08:03:00'},
+    {heart_rate:118.5,spo2:86.2, bp_systolic:90, bp_diastolic:59, temperature:103.5,timestamp:'2025-04-15 08:06:00'},
+    {heart_rate:121.0,spo2:85.5, bp_systolic:88, bp_diastolic:58, temperature:103.8,timestamp:'2025-04-15 08:09:00'},
+    {heart_rate:124.5,spo2:84.8, bp_systolic:86, bp_diastolic:57, temperature:104.1,timestamp:'2025-04-15 08:12:00'},
+    {heart_rate:122.0,spo2:85.2, bp_systolic:87, bp_diastolic:58, temperature:103.9,timestamp:'2025-04-15 08:15:00'},
+    {heart_rate:119.0,spo2:85.9, bp_systolic:89, bp_diastolic:59, temperature:103.6,timestamp:'2025-04-15 08:18:00'},
+    {heart_rate:116.5,spo2:86.5, bp_systolic:91, bp_diastolic:60, temperature:103.2,timestamp:'2025-04-15 08:21:00'},
+    {heart_rate:114.0,spo2:87.1, bp_systolic:93, bp_diastolic:61, temperature:102.9,timestamp:'2025-04-15 08:24:00'},
+    {heart_rate:112.5,spo2:87.8, bp_systolic:94, bp_diastolic:62, temperature:102.6,timestamp:'2025-04-15 08:27:00'},
+    {heart_rate:111.0,spo2:88.2, bp_systolic:95, bp_diastolic:62, temperature:102.4,timestamp:'2025-04-15 08:30:00'},
+    {heart_rate:113.0,spo2:87.5, bp_systolic:93, bp_diastolic:61, temperature:102.7,timestamp:'2025-04-15 08:33:00'},
+    {heart_rate:116.0,spo2:86.8, bp_systolic:91, bp_diastolic:60, temperature:103.1,timestamp:'2025-04-15 08:36:00'},
+    {heart_rate:119.5,spo2:86.0, bp_systolic:89, bp_diastolic:59, temperature:103.5,timestamp:'2025-04-15 08:39:00'},
+    {heart_rate:122.0,spo2:85.4, bp_systolic:87, bp_diastolic:58, temperature:103.8,timestamp:'2025-04-15 08:42:00'},
+    {heart_rate:125.5,spo2:84.6, bp_systolic:85, bp_diastolic:57, temperature:104.2,timestamp:'2025-04-15 08:45:00'},
+    {heart_rate:128.0,spo2:83.9, bp_systolic:84, bp_diastolic:56, temperature:104.5,timestamp:'2025-04-15 08:48:00'},
+    {heart_rate:130.5,spo2:83.2, bp_systolic:82, bp_diastolic:55, temperature:104.7,timestamp:'2025-04-15 08:51:00'},
+    {heart_rate:127.0,spo2:84.0, bp_systolic:84, bp_diastolic:56, temperature:104.4,timestamp:'2025-04-15 08:54:00'},
+    {heart_rate:123.5,spo2:85.0, bp_systolic:86, bp_diastolic:57, temperature:103.9,timestamp:'2025-04-15 08:57:00'},
+  ]
+};
+
+// ─── Alerts DB (in-memory) ─────────────────────────────────────────────────────
+const ALERTS_DB = {
+  P001: [
+    {type:'Elevated Heart Rate', value:'102.5', severity:'High',    timestamp:'2025-04-15 08:12:00'},
+    {type:'Elevated Heart Rate', value:'105.0', severity:'High',    timestamp:'2025-04-15 08:15:00'},
+  ],
+  P002: [],
+  P003: [],
+  P004: [
+    {type:'Low SpO₂',            value:'88.5',  severity:'High',     timestamp:'2025-04-15 08:00:00'},
+    {type:'Elevated Temperature',value:'102.5', severity:'Medium',   timestamp:'2025-04-15 08:00:00'},
+    {type:'High Heart Rate',     value:'110.5', severity:'High',     timestamp:'2025-04-15 08:00:00'},
+    {type:'Critical Low SpO₂',  value:'87.0',  severity:'Critical', timestamp:'2025-04-15 08:03:00'},
+    {type:'High Fever',          value:'103.1', severity:'Critical', timestamp:'2025-04-15 08:03:00'},
+    {type:'High Heart Rate',     value:'124.5', severity:'Critical', timestamp:'2025-04-15 08:12:00'},
+    {type:'Critical Low SpO₂',  value:'84.8',  severity:'Critical', timestamp:'2025-04-15 08:12:00'},
+    {type:'High Fever',          value:'104.7', severity:'Critical', timestamp:'2025-04-15 08:51:00'},
+  ]
+};
+
+// Observations DB
+const OBS_DB = {};
+
+// ─── Clock ──────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('live-clock').textContent =
+    new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ─── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Charts ─────────────────────────────────────────────────────────────────────
+function initCharts() {
+  const commonOpts = {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: { legend: { display: false }, tooltip: {
+      backgroundColor: '#061a24', borderColor: '#0e3848', borderWidth: 1,
+      titleFont: { family: 'Share Tech Mono', size: 11 },
+      bodyFont:  { family: 'Share Tech Mono', size: 12 },
+      titleColor: '#4a7080', bodyColor: '#e8f0f8'
+    }},
+    scales: {
+      x: { grid: { color: 'rgba(14,56,72,0.6)' }, ticks: { color: '#4a7080', font: { family:'Share Tech Mono', size:9 }, maxTicksLimit: 8 }},
+      y: { grid: { color: 'rgba(14,56,72,0.6)' }, ticks: { color: '#4a7080', font: { family:'Share Tech Mono', size:10 }}}
+    }
+  };
+  hrChart = new Chart(document.getElementById('hr-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'HR', data: [],
+        borderColor: '#00e87a', backgroundColor: 'rgba(0,232,122,0.07)',
+        borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#00e87a',
+        tension: 0.35, fill: true
+      },{
+        label: 'Predicted', data: [],
+        borderColor: '#ffb830', backgroundColor: 'transparent',
+        borderWidth: 1, borderDash: [5,4], pointRadius: 4, pointBackgroundColor: '#ffb830',
+        tension: 0, fill: false
+      }]
+    },
+    options: { ...commonOpts, scales: { ...commonOpts.scales,
+      y: { ...commonOpts.scales.y, min: 40, max: 160,
+           ticks: { ...commonOpts.scales.y.ticks, stepSize: 20 }}}}
+  });
+  spo2Chart = new Chart(document.getElementById('spo2-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'SpO₂', data: [],
+        borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.07)',
+        borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#00d4ff',
+        tension: 0.35, fill: true
+      }]
+    },
+    options: { ...commonOpts, scales: { ...commonOpts.scales,
+      y: { ...commonOpts.scales.y, min: 75, max: 105,
+           ticks: { ...commonOpts.scales.y.ticks, stepSize: 5 }}}}
+  });
+}
+
+// ─── Update Charts ───────────────────────────────────────────────────────────────
+function updateCharts(history, prediction) {
+  const labels   = history.map(v => v.timestamp.slice(11,19));
+  const hrData   = history.map(v => parseFloat(v.heart_rate));
+  const spo2Data = history.map(v => parseFloat(v.spo2));
+  hrChart.data.labels = labels;
+  hrChart.data.datasets[0].data = hrData;
+  if (prediction) {
+    hrChart.data.labels = [...labels, 'PRED'];
+    hrChart.data.datasets[1].data = [...new Array(hrData.length-1).fill(null), hrData[hrData.length-1], prediction];
+  } else {
+    hrChart.data.datasets[1].data = [];
+  }
+  hrChart.update('none');
+  spo2Chart.data.labels = labels;
+  spo2Chart.data.datasets[0].data = spo2Data;
+  spo2Chart.update('none');
+}
+
+// ─── Vitals UI ───────────────────────────────────────────────────────────────────
+function updateVitals(v) {
+  if (!v) return;
+  const hr  = parseFloat(v.heart_rate);
+  const spo2= parseFloat(v.spo2);
+  const temp= parseFloat(v.temperature);
+  const bps = parseInt(v.bp_systolic);
+  const bpd = parseInt(v.bp_diastolic);
+  setVital('val-hr',   hr.toFixed(0),         'card-hr',   hr < 60 || hr > 100);
+  setVital('val-spo2', spo2.toFixed(1),        'card-spo2', spo2 < 95);
+  setVital('val-bp',   `${bps}/${bpd}`,        'card-bp',   bps > 140 || bps < 90);
+  setVital('val-temp', temp.toFixed(1),        'card-temp', temp > 99.5 || temp < 97.0);
+  document.getElementById('vitals-timestamp').textContent = v.timestamp;
+}
+function setVital(valId, value, cardId, abnormal) {
+  document.getElementById(valId).textContent = value;
+  document.getElementById(cardId).classList.toggle('abnormal', abnormal);
+}
+
+// ─── Patient Info ────────────────────────────────────────────────────────────────
+function updatePatientUI(id) {
+  const p = PATIENTS.find(x => x.patient_id === id) || {};
+  document.getElementById('pt-name').textContent      = p.name      || id;
+  document.getElementById('pt-avatar').textContent    = p.initials  || id.slice(0,2);
+  document.getElementById('pt-id').textContent        = id;
+  document.getElementById('pt-bed').textContent       = p.bed       || '—';
+  document.getElementById('pt-condition').textContent = p.condition || '—';
+  document.getElementById('pt-age').textContent       = p.age       || '—';
+  document.getElementById('pt-gender').textContent    = p.gender    || '—';
+  document.getElementById('pt-blood').textContent     = p.blood     || '—';
+  document.getElementById('pt-doctor').textContent    = p.doctor    || '—';
+  document.getElementById('pt-admitted').textContent  = p.admitted  || '—';
+}
+
+// ─── Alerts UI ───────────────────────────────────────────────────────────────────
+function updateAlerts(alerts) {
+  const list = document.getElementById('alert-list');
+  if (!alerts || alerts.length === 0) {
+    list.innerHTML = '<div class="no-alerts">✓ No active alerts</div>';
+    document.getElementById('alert-dot').style.background = 'var(--green)';
+    document.getElementById('alert-count-badge').textContent = 'All Clear';
+    document.getElementById('alert-count-header').textContent = '0 alerts';
+    return;
+  }
+  const hasCritical = alerts.some(a => a.severity === 'Critical');
+  document.getElementById('alert-dot').style.background = hasCritical ? 'var(--red)' : 'var(--amber)';
+  document.getElementById('alert-count-badge').textContent = `${alerts.length} Alert${alerts.length>1?'s':''}`;
+  document.getElementById('alert-count-header').textContent = `${alerts.length} alert${alerts.length>1?'s':''}`;
+  const last10 = alerts.slice(-10);
+  list.innerHTML = [...last10].reverse().map(a => `
+    <div class="alert-item ${a.severity}">
+      <span class="alert-severity-chip">${a.severity}</span>
+      <div>
+        <div class="alert-type">${a.type}</div>
+        <div class="alert-meta">${a.timestamp} · Value: ${a.value}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── Observations UI ─────────────────────────────────────────────────────────────
+function renderObservations(pid) {
+  const obs = (OBS_DB[pid] || []);
+  const list = document.getElementById('obs-list');
+  if (obs.length === 0) {
+    list.innerHTML = '<div class="no-alerts" style="color:var(--muted)">No observations recorded</div>';
+    return;
+  }
+  list.innerHTML = [...obs].slice(-5).reverse().map(o => `
+    <div class="obs-item">
+      <div class="obs-header">
+        <span class="obs-by">${o.entered_by}</span>
+        <span class="obs-time">${o.timestamp}</span>
+      </div>
+      <div class="obs-tags">
+        <span class="obs-tag">Pain: ${o.pain_level}/10</span>
+        <span class="obs-tag">Breathing: ${o.breathing_difficulty}</span>
+        <span class="obs-tag">Consciousness: ${o.consciousness_level}</span>
+      </div>
+      ${o.notes ? `<div class="obs-notes">${o.notes}</div>` : ''}
+    </div>`).join('');
+}
+
+// ─── Prediction Logic ────────────────────────────────────────────────────────────
+function predictNextHR(pid) {
+  const vitals = VITALS_DB[pid] || [];
+  if (vitals.length < 2) return { predicted: null, risk: 'Insufficient data' };
+  const last2  = vitals.slice(-2);
+  const hr1 = parseFloat(last2[0].heart_rate);
+  const hr2 = parseFloat(last2[1].heart_rate);
+  const predicted = Math.round((hr2 + (hr2 - hr1)) * 10) / 10;
+  const trend = hr2 > hr1 ? 'increasing' : (hr2 < hr1 ? 'decreasing' : 'stable');
+  const risk = (trend === 'increasing' && predicted > 95)
+    ? 'Predicted Risk: Increasing HR trend detected'
+    : (trend === 'stable' ? 'Stable' : 'Improving');
+  return { predicted, risk };
+}
+
+// ─── Alert Generator ─────────────────────────────────────────────────────────────
+function generateAlerts(pid, hr, spo2, temp, bps) {
+  const now = new Date().toISOString().replace('T',' ').slice(0,19);
+  const alerts = [];
+  if (hr > 120)    alerts.push({type:'High Heart Rate',      value:hr.toFixed(1),   severity:'Critical', timestamp:now});
+  else if (hr>100) alerts.push({type:'Elevated Heart Rate',  value:hr.toFixed(1),   severity:'High',     timestamp:now});
+  if (spo2 < 85)   alerts.push({type:'Critical Low SpO₂',   value:spo2.toFixed(1), severity:'Critical', timestamp:now});
+  else if (spo2<90)alerts.push({type:'Low SpO₂',             value:spo2.toFixed(1), severity:'High',     timestamp:now});
+  if (temp > 103)  alerts.push({type:'High Fever',           value:temp.toFixed(1), severity:'Critical', timestamp:now});
+  else if (temp>101)alerts.push({type:'Elevated Temperature',value:temp.toFixed(1), severity:'Medium',   timestamp:now});
+  if (bps > 160)   alerts.push({type:'Hypertension Alert',   value:bps,             severity:'High',     timestamp:now});
+  else if (bps<90) alerts.push({type:'Low Blood Pressure',   value:bps,             severity:'High',     timestamp:now});
+  return alerts;
+}
+
+// ─── Simulate Reading ────────────────────────────────────────────────────────────
+function gauss(mean, std) {
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+function triggerSimulate() {
+  const pid = currentPatient;
+  if (!VITALS_DB[pid]) VITALS_DB[pid] = [];
+  const now = new Date().toISOString().replace('T',' ').slice(0,19);
+  const hr   = Math.round(clamp(gauss(78,15), 45, 150) * 10) / 10;
+  const spo2 = Math.round(clamp(gauss(96, 3), 80, 100) * 10) / 10;
+  const bps  = Math.round(clamp(gauss(120,20), 80, 175));
+  const bpd  = Math.round(clamp(gauss(80,12), 55, 110));
+  const temp = Math.round(clamp(gauss(98.6,1.8), 96, 105) * 10) / 10;
+  VITALS_DB[pid].push({heart_rate:hr, spo2, bp_systolic:bps, bp_diastolic:bpd, temperature:temp, timestamp:now});
+  if (VITALS_DB[pid].length > 40) VITALS_DB[pid].shift();
+  const newAlerts = generateAlerts(pid, hr, spo2, temp, bps);
+  if (!ALERTS_DB[pid]) ALERTS_DB[pid] = [];
+  ALERTS_DB[pid].push(...newAlerts);
+  if (newAlerts.length > 0) toast(`⚠ ${newAlerts.length} new alert(s) generated`, 'warning');
+  else toast('✓ Simulated reading recorded', 'info');
+  refreshDisplay(pid);
+}
+
+// ─── Refresh display for patient ─────────────────────────────────────────────────
+function refreshDisplay(pid) {
+  const vitals  = VITALS_DB[pid] || [];
+  const history = vitals.slice(-20);
+  const latest  = vitals[vitals.length - 1] || null;
+  const { predicted, risk } = predictNextHR(pid);
+  if (latest) updateVitals(latest);
+  updateCharts(history, predicted);
+  updatePrediction(predicted, risk);
+  updateAlerts(ALERTS_DB[pid] || []);
+  renderObservations(pid);
+  document.getElementById('conn-status').textContent = 'DEMO MODE';
+}
+
+// ─── Prediction UI ───────────────────────────────────────────────────────────────
+function updatePrediction(predicted, risk) {
+  document.getElementById('pred-hr').textContent = predicted ? `${predicted} BPM` : '—';
+  const riskEl = document.getElementById('pred-risk');
+  riskEl.textContent = risk || '—';
+  riskEl.className = 'pred-risk';
+  if (risk && risk.toLowerCase().includes('risk'))     riskEl.classList.add('risk-bad');
+  else if (risk && (risk.includes('Stable')||risk.includes('Improving'))) riskEl.classList.add('risk-ok');
+  else riskEl.classList.add('risk-warning');
+}
+
+// ─── Switch patient ───────────────────────────────────────────────────────────────
+function switchPatient() {
+  currentPatient = document.getElementById('patient-select').value;
+  updatePatientUI(currentPatient);
+  refreshDisplay(currentPatient);
+  resetCountdown();
+}
+
+// ─── Auto-refresh ──────────────────────────────────────────────────────────────────
+function resetCountdown() { countdown = 3; document.getElementById('countdown').textContent = '3s'; }
+function startAutoRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    if (!autoRefresh) return;
+    countdown--;
+    document.getElementById('countdown').textContent = `${countdown}s`;
+    if (countdown <= 0) { triggerSimulate(); resetCountdown(); }
+  }, 1000);
+}
+function toggleAutoRefresh() {
+  autoRefresh = !autoRefresh;
+  const btn = document.querySelector('.patient-bar .btn-secondary');
+  if (autoRefresh) {
+    btn.textContent = '⏸ Auto-Refresh'; resetCountdown(); toast('Auto-refresh enabled');
+  } else {
+    btn.textContent = '▶ Start Refresh';
+    document.getElementById('countdown').textContent = 'OFF';
+    toast('Auto-refresh paused');
+  }
+}
+
+// ─── Submit observation ───────────────────────────────────────────────────────────
+function submitObservation() {
+  const pid = currentPatient;
+  if (!OBS_DB[pid]) OBS_DB[pid] = [];
+  const now = new Date().toISOString().replace('T',' ').slice(0,19);
+  OBS_DB[pid].push({
+    pain_level:           document.getElementById('obs-pain').value,
+    breathing_difficulty: document.getElementById('obs-breath').value,
+    consciousness_level:  document.getElementById('obs-consciousness').value,
+    entered_by:           document.getElementById('obs-by').value,
+    notes:                document.getElementById('obs-notes').value,
+    timestamp: now
+  });
+  toast('✓ Observation submitted');
+  document.getElementById('obs-notes').value = '';
+  renderObservations(pid);
+}
+
+// ─── Manage Patients Modal ────────────────────────────────────────────────────────
+function openManageModal() {
+  document.getElementById('manage-modal').classList.add('open');
+  renderDischargeList();
+}
+function closeManageModal() {
+  document.getElementById('manage-modal').classList.remove('open');
+}
+function switchModalTab(tabId, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if (tabId === 'tab-discharge') renderDischargeList();
+}
+
+// ─── Admit Patient ────────────────────────────────────────────────────────────────
+function admitPatient() {
+  const name      = document.getElementById('admit-name').value.trim();
+  const age       = document.getElementById('admit-age').value.trim();
+  const gender    = document.getElementById('admit-gender').value;
+  const condition = document.getElementById('admit-condition').value.trim();
+  const bed       = document.getElementById('admit-bed').value;
+  const blood     = document.getElementById('admit-blood').value;
+  const doctor    = document.getElementById('admit-doctor').value;
+  if (!name || !age || !condition) {
+    toast('Please fill in Name, Age and Condition', 'error'); return;
+  }
+  const pid  = `P00${nextPatientNum++}`;
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const today = new Date().toISOString().slice(0,10);
+  const patient = { patient_id:pid, name, initials, bed, condition,
+    age:`${age} yrs`, gender, blood, doctor, admitted:today, status:'active' };
+  PATIENTS.push(patient);
+  VITALS_DB[pid]  = [];
+  ALERTS_DB[pid]  = [];
+  OBS_DB[pid]     = [];
+  // Add to dropdown
+  const sel = document.getElementById('patient-select');
+  const opt = document.createElement('option');
+  opt.value = pid;
+  opt.textContent = `${pid} — ${name} · ${bed}`;
+  sel.appendChild(opt);
+  // Clear form
+  document.getElementById('admit-name').value = '';
+  document.getElementById('admit-age').value  = '';
+  document.getElementById('admit-condition').value = '';
+  toast(`✓ ${name} admitted to ${bed}`, 'info');
+  renderDischargeList();
+}
+
+// ─── Discharge Patient ────────────────────────────────────────────────────────────
+function dischargePatient(pid) {
+  const p = PATIENTS.find(x => x.patient_id === pid);
+  if (!p) return;
+  if (p.status === 'discharged') { toast(`${p.name} already discharged`, 'warning'); return; }
+  p.status = 'discharged';
+  // Remove from dropdown
+  const sel = document.getElementById('patient-select');
+  const opt = sel.querySelector(`option[value="${pid}"]`);
+  if (opt) opt.remove();
+  // If currently viewing this patient, switch to first active
+  if (currentPatient === pid) {
+    const first = PATIENTS.find(x => x.status === 'active');
+    if (first) {
+      sel.value = first.patient_id;
+      currentPatient = first.patient_id;
+      updatePatientUI(currentPatient);
+      refreshDisplay(currentPatient);
+    }
+  }
+  toast(`✓ ${p.name} discharged from ${p.bed}`, 'info');
+  renderDischargeList();
+}
+
+function renderDischargeList() {
+  const list = document.getElementById('discharge-list');
+  if (PATIENTS.length === 0) {
+    list.innerHTML = '<div class="no-alerts" style="color:var(--muted)">No patients on record</div>';
+    return;
+  }
+  list.innerHTML = PATIENTS.map(p => `
+    <div class="patient-manage-item">
+      <div class="patient-manage-info">
+        <div class="pmg-name">${p.name} <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${p.patient_id}</span></div>
+        <div class="pmg-meta">${p.bed} · Admitted: ${p.admitted} · Dr: ${p.doctor}</div>
+        <div class="pmg-condition">${p.condition}</div>
+      </div>
+      ${p.status === 'active'
+        ? `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+            <span class="badge-active">● Active</span>
+            <button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="dischargePatient('${p.patient_id}')">Discharge</button>
+           </div>`
+        : `<span class="badge-discharged">Discharged</span>`
+      }
+    </div>`).join('');
+}
+
+// Close modal on overlay click
+document.getElementById('manage-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeManageModal();
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────────
+(function init() {
+  initCharts();
+  updatePatientUI(currentPatient);
+  refreshDisplay(currentPatient);
+  startAutoRefresh();
+})();
+</script>
+</body>
+</html>
