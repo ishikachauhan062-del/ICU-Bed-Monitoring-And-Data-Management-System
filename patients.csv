@@ -1,0 +1,5 @@
+patient_id,name,age,gender,condition,icu_bed,admission_date,doctor,blood_group
+P001,Rajesh Kumar,58,Male,Acute Myocardial Infarction,ICU-01,2025-04-10,Dr. Anita Sharma,B+
+P002,Priya Mehta,42,Female,Severe Pneumonia,ICU-02,2025-04-11,Dr. Vikram Rao,O+
+P003,Arun Singh,67,Male,Post-Operative Care (CABG),ICU-03,2025-04-09,Dr. Suresh Iyer,A+
+P004,Sunita Verma,35,Female,Septic Shock,ICU-04,2025-04-12,Dr. Meena Gupta,AB-

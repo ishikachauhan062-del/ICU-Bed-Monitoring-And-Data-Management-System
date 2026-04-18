@@ -1,0 +1,7 @@
+alert_id,patient_id,type,value,severity,timestamp
+A1001,P001,Elevated Heart Rate,102.5,High,2025-04-15 08:12:00
+A4001,P004,Low SpO₂,88.5,High,2025-04-15 08:00:00
+A4002,P004,Elevated Temperature,102.5,Medium,2025-04-15 08:00:00
+A4003,P004,High Heart Rate,110.5,High,2025-04-15 08:00:00
+A4004,P004,Critical Low SpO₂,87.0,Critical,2025-04-15 08:03:00
+A4005,P004,High Fever,103.1,Critical,2025-04-15 08:03:00
